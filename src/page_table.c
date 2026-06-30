@@ -15,69 +15,76 @@ void page_table_init(void)
 
 int page_table_lookup(int page)
 {
-    /*
-     * TODO:
-     * Se a página for válida, retornar o quadro.
-     * Caso contrário, retornar -1.
-     */
+    if (page < 0 || page >= PAGE_TABLE_SIZE) {
+        return -1;
+    }
 
-    (void) page;
+    if (page_table[page].valid) {
+        return page_table[page].frame;
+    }
+
     return -1;
 }
 
 void page_table_update(int page, int frame)
 {
-    /*
-     * TODO:
-     * Atualizar a entrada da tabela de páginas.
-     */
+    if (page < 0 || page >= PAGE_TABLE_SIZE) {
+        return;
+    }
 
-    (void) page;
-    (void) frame;
+    page_table[page].frame = frame;
+    page_table[page].valid = 1;
+    page_table[page].reference_bit = 0;
+    page_table[page].aging_counter = 0;
 }
 
 void page_table_invalidate(int page)
 {
-    /*
-     * TODO:
-     * Invalidar a entrada da página.
-     */
+    if (page < 0 || page >= PAGE_TABLE_SIZE) {
+        return;
+    }
 
-    (void) page;
+    page_table[page].frame = -1;
+    page_table[page].valid = 0;
+    page_table[page].reference_bit = 0;
+    page_table[page].aging_counter = 0;
 }
 
 void page_table_set_reference(int page)
 {
-    /*
-     * TODO:
-     * Marcar o bit de referência da página como 1.
-     */
+    if (page < 0 || page >= PAGE_TABLE_SIZE) {
+        return;
+    }
 
-    (void) page;
+    page_table[page].reference_bit = 1;
 }
 
 void page_table_update_aging(void)
 {
     /*
-     * TODO:
-     * Implementar atualização do LRU aproximado.
+     * Para cada pagina valida na tabela de paginas:
+     * 1. Desloca o contador de envelhecimento (8 bits) para a direita;
+     * 2. Insere o bit de referencia no bit mais significativo;
+     * 3. Zera o bit de referencia.
      *
-     * Para cada página válida:
-     * 1. Deslocar o contador de envelhecimento para a direita;
-     * 2. Inserir o bit de referência no bit mais significativo;
-     * 3. Zerar o bit de referência.
-     *
-     * Caso o trabalho use apenas 2 bits, adaptar a máscara do contador.
+     * Paginas com acessos mais recentes acumulam bits 1 mais a esquerda,
+     * resultando em contadores maiores; paginas nao acessadas recentemente
+     * tem o contador deslocado em direcao a zero. A pagina escolhida para
+     * substituicao (em memory.c) sera a de menor contador.
      */
+    for (int i = 0; i < PAGE_TABLE_SIZE; i++) {
+        if (!page_table[i].valid) {
+            continue;
+        }
 
-    /*
-     * Exemplo conceitual para 8 bits:
-     *
-     * aging_counter >>= 1;
-     * if (reference_bit)
-     *     aging_counter |= 0x80;
-     * reference_bit = 0;
-     */
+        page_table[i].aging_counter >>= 1;
+
+        if (page_table[i].reference_bit) {
+            page_table[i].aging_counter |= 0x80;
+        }
+
+        page_table[i].reference_bit = 0;
+    }
 }
 
 int page_table_get_frame(int page)
