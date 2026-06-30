@@ -29,13 +29,15 @@ int main(void)
 
         /*
          * O arquivo de entrada possui inteiros de 32 bits.
-         * Apenas os 16 bits menos significativos devem ser considerados.
-         * TODO: Implementar lógica de obtenção do número da página 
-         * e do offset.
+         * Apenas os 16 bits menos significativos devem ser considerados,
+         * por isso aplicamos uma mascara 0xFFFF.
+         * Dos 16 bits resultantes:
+         *   - os 8 bits mais significativos (15-8) sao o numero da pagina
+         *   - os 8 bits menos significativos (7-0) sao o offset
          */
-        logical_address = 0;
-        int page = 0;
-        int offset = 0;
+        logical_address = logical_address & 0xFFFF;
+        int page = (logical_address >> 8) & 0xFF;
+        int offset = logical_address & 0xFF;
 
         int frame = tlb_lookup(page);
 
@@ -63,9 +65,11 @@ int main(void)
         page_table_update_aging();
         
         /*
-        * TODO: Implementar cálculo do physical_address.
+        * O endereco fisico e formado pelo numero do quadro (frame)
+        * multiplicado pelo tamanho do quadro, somado ao offset
+        * dentro da pagina/quadro.
         */
-        int physical_address = 0;
+        int physical_address = (frame * FRAME_SIZE) + offset;
         signed char value = read_memory(frame, offset);
 
         printf("Logical address: %d Physical address: %d Value: %d\n",
