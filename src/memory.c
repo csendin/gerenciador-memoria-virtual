@@ -43,15 +43,13 @@ static int find_free_frame(void)
 int handle_page_fault(int page)
 {
     /*
-     * TODO:
      * 1. Procurar quadro livre.
-     * 2. Se não houver quadro livre, selecionar página vítima.
-     * 3. Invalidar página vítima na tabela de páginas.
-     * 4. Remover página vítima do TLB.
-     * 5. Ler a página correta do BACKING_STORE.bin.
-     * 6. Atualizar frame_to_page.
-     * 7. Atualizar tabela de páginas.
-     * 8. Retornar número do frame.
+     * 2. Se não houver quadro livre, selecionar página vítima (LRU
+     *    aproximado), invalidá-la na tabela de páginas e removê-la
+     *    do TLB, liberando seu quadro para reutilização.
+     * 3. Ler a página correta do BACKING_STORE.bin para o quadro.
+     * 4. Atualizar frame_to_page e a tabela de páginas.
+     * 5. Retornar o número do quadro.
      */
 
     int frame = find_free_frame();
@@ -59,54 +57,64 @@ int handle_page_fault(int page)
     if (frame == -1) {
         int victim_page = select_victim_page();
 
-        /*
-         * TODO:
-         * Obter o quadro da página vítima.
-         * Invalidar tabela e TLB.
-         */
+        frame = page_table_get_frame(victim_page);
 
-        (void) victim_page;
-
-        frame = 0;
+        page_table_invalidate(victim_page);
+        tlb_remove(victim_page);
     }
-
-    /*
-     * TODO:
-     * Fazer fseek para page * PAGE_SIZE.
-     * Fazer fread de PAGE_SIZE bytes para physical_memory[frame].
-     */
 
     if (backing == NULL) {
         fprintf(stderr, "Erro interno: BACKING_STORE nao inicializado.\n");
         exit(1);
     }
 
-    (void) page;
+    if (fseek(backing, (long) page * PAGE_SIZE, SEEK_SET) != 0) {
+        fprintf(stderr, "Erro interno: falha ao buscar pagina %d no BACKING_STORE.\n", page);
+        exit(1);
+    }
+
+    size_t bytes_read = fread(physical_memory[frame], sizeof(signed char), PAGE_SIZE, backing);
+
+    if (bytes_read != PAGE_SIZE) {
+        fprintf(stderr, "Erro interno: falha ao ler pagina %d do BACKING_STORE.\n", page);
+        exit(1);
+    }
+
+    frame_to_page[frame] = page;
+    page_table_update(page, frame);
 
     return frame;
 }
 
 int select_victim_page(void)
 {
-    /*
-     * TODO:
-     * Selecionar a página válida com menor aging_counter.
-     * Em caso de empate, qualquer critério consistente pode ser usado.
-     */
+    int victim = -1;
+    int min_counter = 256; /* maior que qualquer valor possivel de 8 bits (0-255) */
 
-    return 0;
+    for (int page = 0; page < PAGE_TABLE_SIZE; page++) {
+        if (!page_table_is_valid(page)) {
+            continue;
+        }
+
+        int counter = page_table_get_aging_counter(page);
+
+        if (counter < min_counter) {
+            min_counter = counter;
+            victim = page;
+        }
+    }
+
+    return victim;
 }
 
 signed char read_memory(int frame, int offset)
 {
-    /*
-     * TODO:
-     * Retornar o byte armazenado em physical_memory[frame][offset].
-     */
+    if (frame < 0 || frame >= NUM_FRAMES || offset < 0 || offset >= FRAME_SIZE) {
+        fprintf(stderr, "Erro interno: acesso invalido a memoria fisica (frame=%d, offset=%d).\n", frame, offset);
+        exit(1);
+    }
 
-    (void) frame;
-    (void) offset;
-    return 0;
+    return physical_memory[frame][offset];
 }
 
 int get_page_loaded_in_frame(int frame)
